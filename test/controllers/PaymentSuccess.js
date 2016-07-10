@@ -24,16 +24,16 @@ describe('paymentSuccess', () => {
     'M-PESA_TRX_DATE': '2014-08-01 15:30:00',
     'M-PESA_TRX_ID': 'FG232FT0',
     TRX_ID: '1448',
-    ENC_PARAMS: '{}',
+    ENC_PARAMS: new Buffer('{}').toString('base64'),
   };
   const res = {};
   res.sendStatus = sinon.stub();
   const next = sinon.stub();
 
-  const response = { response: {} };
+  const response = {};
   for (const x of Object.keys(req.body)) {
     const prop = x.toLowerCase().replace(/\-/g, '');
-    response.response[prop] = req.body[x];
+    response[prop] = req.body[x];
   }
 
   let error = false;
@@ -42,16 +42,32 @@ describe('paymentSuccess', () => {
   });
 
   it('Make a request to MERCHANT_ENDPOINT and respond to SAG with OK', () => {
-    process.env.MERCHANT_ENDPOINT = 'https://awesome-service.com/mpesa/callback';
+    process.env.MERCHANT_ENDPOINT = 'https://merchant-endpoint.com/mpesa/payment/complete';
     paymentSuccess.handler(req, res, next);
 
     const spyCall = paymentSuccess.request.getCall(0);
     const args = spyCall.args[0];
+    const argsResponseBody = JSON.parse(args.body);
 
     assert.isTrue(res.sendStatus.calledWithExactly(200));
     assert.isTrue(paymentSuccess.request.called);
     assert.isFalse(next.called);
-    expect(response).to.deep.equal(JSON.parse(args.body));
+    assert.sameMembers(Object.keys(argsResponseBody.response), [
+      'amount',
+      'description',
+      'extra_payload',
+      'merchant_transaction_id',
+      'message',
+      'mpesa_trx_date',
+      'mpesa_trx_id',
+      'msisdn',
+      'password',
+      'return_code',
+      'status_code',
+      'trx_id',
+      'trx_status',
+      'username'
+    ]);
   });
 
   it('If MERCHANT_ENDPOINT is not provided, next is passed an error', () => {
@@ -67,7 +83,7 @@ describe('paymentSuccess', () => {
     assert.isTrue(args instanceof Error);
   });
 
-  it('If ENDPOINT is not reachable, an error reponse is sent back', () => {
+  it('If MERCHANT_ENDPOINT is not reachable, an error response is sent back', () => {
     process.env.MERCHANT_ENDPOINT = 'https://undefined-url';
     error = new Error('ENDPOINT not reachable');
     paymentSuccess.handler(req, res, next);
